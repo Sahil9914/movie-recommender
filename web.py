@@ -229,68 +229,78 @@ import pandas as pd
 import requests
 
 # Function to fetch movie poster from TMDB API
+# NOTE: This key is for demonstration. You should get your own free key from themoviedb.org
 def fetch_poster(movie_id):
     try:
-        response = requests.get(f'https://api.themoviedb.org/3/movie/{movie_id}?api_key=8265bd1679663a7ea12ac168da84d2e8&language=en-US')
-        response.raise_for_status()  # Raises an exception for bad responses (4xx or 5xx)
+        api_key = "8265bd1679663a7ea12ac168da84d2e8"
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}&language=en-US"
+        response = requests.get(url)
+        response.raise_for_status()  # Checks for HTTP errors
         data = response.json()
         poster_path = data.get('poster_path')
         if poster_path:
             return "https://image.tmdb.org/t/p/w500/" + poster_path
         else:
-            # Return a placeholder if no poster is found
-            return "https://via.placeholder.com/500x750.png?text=No+Poster+Available"
-    except requests.exceptions.RequestException as e:
-        print(e) # You can log the error for debugging
+            return "https://via.placeholder.com/500x750.png?text=No+Poster"
+    except requests.exceptions.RequestException:
         return "https://via.placeholder.com/500x750.png?text=API+Error"
 
 # Function to get movie recommendations
 def recommend(movie, movies_df, similarity_matrix):
-    # Find the index of the selected movie
+    # Get the index of the selected movie from the dataframe
     movie_index = movies_df[movies_df['title'] == movie].index[0]
     
-    # Get the similarity scores for that movie
+    # Get the similarity scores for that movie against all other movies
     distances = similarity_matrix[movie_index]
     
-    # Sort the movies based on similarity and get the top 5
+    # Sort the movies by similarity score in descending order and get the top 5
     movies_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
 
+    # Prepare lists to hold the names and posters of recommended movies
     recommended_movies_names = []
     recommended_movies_posters = []
     for i in movies_list:
+        # Get movie details by index
         movie_id = movies_df.iloc[i[0]].movie_id
-        recommended_movies_names.append(movies_df.iloc[i[0]].title)
+        movie_title = movies_df.iloc[i[0]].title
+        
+        # Add the movie title and poster to our lists
+        recommended_movies_names.append(movie_title)
         recommended_movies_posters.append(fetch_poster(movie_id))
         
     return recommended_movies_names, recommended_movies_posters
 
-# --- Main App ---
+# --- Main App Execution ---
 
-# Load data files
+# Load the data files
 try:
     movies_dict = pickle.load(open('movie_dict.pkl', 'rb'))
     movies = pd.DataFrame(movies_dict)
     
+    # This was the missing line that caused the original error
     similarity = pickle.load(open('similarity.pkl', 'rb'))
 except FileNotFoundError:
-    st.error("Error: Make sure 'movie_dict.pkl' and 'similarity.pkl' are in your GitHub repository.")
-    st.stop()
+    st.error("🚨 Error: Make sure 'movie_dict.pkl' and 'similarity.pkl' are in your GitHub repository.")
+    st.stop() # Stop the app from running further if files are missing
 
-# App layout
+# App Title
 st.title('🎬 Movie Recommender System')
 
+# Movie selection dropdown
 selected_movie_name = st.selectbox(
     'Select a movie you like to get recommendations:',
     movies['title'].values
 )
 
+# Recommend button
 if st.button('Recommend'):
     with st.spinner('Finding recommendations for you...'):
+        # Call the recommend function and pass the required data
         names, posters = recommend(selected_movie_name, movies, similarity)
         
         st.write("Here are some movies you might like:")
         
-        # Display recommendations in 5 columns
+        # Display the 5 recommendations in 5 columns
         cols = st.columns(5)
         for i in range(5):
             with cols[i]:
